@@ -9,18 +9,38 @@ use Illuminate\Support\Facades\Log;
 
 class SalesPageController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
 
-    // Tampilkan form
     public function create()
     {
         return view('sales.create');
     }
+    
+    public function edit(SalesPage $salesPage)
+    {
+        if ($salesPage->user_id !== auth()->id()) {
+            abort(403);
+        }
+        return view('sales.edit', compact('salesPage'));
+    }
 
-    // Generate dengan Gemini API
+    public function update(Request $request, SalesPage $salesPage)
+    {
+        if ($salesPage->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $request->validate([
+            'generated_output' => 'required|string',
+        ]);
+
+        $salesPage->update([
+            'generated_output' => $request->generated_output
+        ]);
+
+        return redirect()->route('sales.preview', $salesPage->id)
+            ->with('success', 'Sales page updated successfully!');
+    }
+
     public function generate(Request $request)
     {
         $request->validate([
@@ -32,15 +52,15 @@ class SalesPageController extends Controller
             'unique_selling_points' => 'nullable|string',
         ]);
 
-        // Buat prompt untuk Gemini
         $prompt = $this->buildPrompt($request);
 
-        // Panggil Gemini API
         $apiKey = env('GEMINI_API_KEY');
+
+        $model = 'gemini-2.5-flash';
         
         try {
             $response = Http::timeout(60)->post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}",
+                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
                 [
                     'contents' => [
                         [
@@ -63,10 +83,8 @@ class SalesPageController extends Controller
             $result = $response->json();
             $generatedHtml = $result['candidates'][0]['content']['parts'][0]['text'] ?? '';
 
-            // Bersihkan markdown jika ada
             $generatedHtml = $this->cleanHtml($generatedHtml);
 
-            // Simpan ke database
             $salesPage = SalesPage::create([
                 'user_id' => auth()->id(),
                 'product_name' => $request->product_name,
@@ -79,59 +97,59 @@ class SalesPageController extends Controller
             ]);
 
             return redirect()->route('sales.preview', $salesPage->id)
-                ->with('success', 'Sales page berhasil digenerate!');
+                ->with('success', 'Sales page generated successfully!');
 
         } catch (\Exception $e) {
             Log::error('Gemini API Error: ' . $e->getMessage());
-            return back()->with('error', 'Gagal generate: ' . $e->getMessage());
+            return back()->with('error', 'Generation failed: ' . $e->getMessage());
         }
     }
 
     private function buildPrompt($request)
     {
-        return "Buatkan sebuah sales page HTML/CSS yang lengkap, modern, dan responsif untuk produk berikut:
+        return "Create a complete, modern, responsive sales page HTML/CSS for the following product:
 
-Nama Produk: {$request->product_name}
-Deskripsi: {$request->description}
-Fitur-fitur: {$request->features}
-Target Audiens: {$request->target_audience}
-Harga: Rp " . number_format($request->price, 0, ',', '.') . "
-Unique Selling Points: " . ($request->unique_selling_points ?: 'Tidak ada') . "
+Product Name: {$request->product_name}
+Description: {$request->description}
+Features: {$request->features}
+Target Audience: {$request->target_audience}
+Price: $" . number_format($request->price, 2) . "
+Unique Selling Points: " . ($request->unique_selling_points ?: 'None') . "
 
-INSTRUKSI PENTING:
-1. Hasil harus berupa HTML LENGKAP (dengan <!DOCTYPE html>, <head>, <style>, <body>)
-2. Gunakan Tailwind CSS atau CSS modern yang bagus
-3. Sertakan komponen berikut:
-   - Headline yang menarik
+IMPORTANT INSTRUCTIONS:
+1. Output must be COMPLETE HTML (with <!DOCTYPE html>, <head>, <style>, <body>)
+2. Use Tailwind CSS or modern beautiful CSS
+3. Include these components:
+   - Attention-grabbing headline
    - Subheadline
-   - Hero section dengan gambar placeholder
-   - Deskripsi produk
-   - Daftar benefit (gunakan icon placeholder)
-   - Breakdown fitur (grid layout)
-   - Social proof placeholder (testimoni dummy)
-   - Pricing display dengan CTA button
-   - Call-to-action yang jelas
-4. Desain harus profesional, modern, dan mobile responsive
-5. Jangan tambahkan teks di luar HTML, langsung berikan HTML-nya saja
-6. Gunakan warna yang menarik dan sesuai dengan jenis produk";
+   - Hero section with placeholder image
+   - Product description
+   - Benefits list (use placeholder icons)
+   - Features breakdown (grid layout)
+   - Social proof placeholder (dummy testimonial)
+   - Pricing display with CTA button
+   - Clear call-to-action
+4. Design must be professional, modern, and mobile responsive
+5. Don't add any text outside HTML, return only HTML
+6. Use attractive colors matching the product type
+7. Use ENGLISH language for all text in the sales page";
     }
 
     private function cleanHtml($content)
     {
-        // Hapus markdown code blocks jika ada
         $content = preg_replace('/```html\s*/i', '', $content);
         $content = preg_replace('/```\s*$/i', '', $content);
         return $content;
     }
 
-    // Preview sales page
     public function preview(SalesPage $salesPage)
     {
-        $this->authorize('view', $salesPage);
+        if (auth()->id() !== $salesPage->user_id) {
+            abort(403, 'Unauthorized action.');
+        }
         return view('sales.preview', compact('salesPage'));
     }
 
-    // History page
     public function history(Request $request)
     {
         $query = SalesPage::where('user_id', auth()->id());
@@ -145,22 +163,23 @@ INSTRUKSI PENTING:
         return view('sales.history', compact('salesPages'));
     }
 
-    // Delete
     public function destroy(SalesPage $salesPage)
     {
-        $this->authorize('delete', $salesPage);
+        if (auth()->id() !== $salesPage->user_id) {
+            abort(403, 'Unauthorized action.');
+        }
         $salesPage->delete();
         
         return redirect()->route('sales.history')
-            ->with('success', 'Sales page berhasil dihapus!');
+            ->with('success', 'Sales page deleted successfully!');
     }
 
-    // Regenerate (bonus)
     public function regenerate(SalesPage $salesPage)
     {
-        $this->authorize('update', $salesPage);
+        if (auth()->id() !== $salesPage->user_id) {
+            abort(403, 'Unauthorized action.');
+        }
         
-        // Buat request object dari data yang tersimpan
         $request = new Request([
             'product_name' => $salesPage->product_name,
             'description' => $salesPage->description,
@@ -173,10 +192,11 @@ INSTRUKSI PENTING:
         return $this->generate($request);
     }
 
-    // Export HTML
     public function export(SalesPage $salesPage)
     {
-        $this->authorize('view', $salesPage);
+        if (auth()->id() !== $salesPage->user_id) {
+            abort(403, 'Unauthorized action.');
+        }
         
         $filename = $salesPage->product_name . '_sales_page.html';
         $filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', $filename);

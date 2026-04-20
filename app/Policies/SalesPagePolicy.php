@@ -21,7 +21,7 @@ class SalesPagePolicy
      */
     public function view(User $user, SalesPage $salesPage): bool
     {
-        return false;
+        return $user->id === $salesPage->user_id;
     }
 
     /**
@@ -37,7 +37,7 @@ class SalesPagePolicy
      */
     public function update(User $user, SalesPage $salesPage): bool
     {
-        return false;
+        return $user->id === $salesPage->user_id;
     }
 
     /**
@@ -45,7 +45,7 @@ class SalesPagePolicy
      */
     public function delete(User $user, SalesPage $salesPage): bool
     {
-        return false;
+        return $user->id === $salesPage->user_id;
     }
 
     /**
