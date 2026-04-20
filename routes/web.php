@@ -26,6 +26,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/sales/{salesPage}', [SalesPageController::class, 'destroy'])->name('sales.destroy');
     Route::post('/sales/regenerate/{salesPage}', [SalesPageController::class, 'regenerate'])->name('sales.regenerate');
     Route::get('/sales/export/{salesPage}', [SalesPageController::class, 'export'])->name('sales.export');
+
+    Route::get('/render-html/{id}', function($id) {
+    $page = App\Models\SalesPage::findOrFail($id);
+    if ($page->user_id != auth()->id()) abort(403);
+    return response($page->generated_output, 200)->header('Content-Type', 'text/html');
+})->name('render.html');
 });
 
 require __DIR__.'/auth.php';
