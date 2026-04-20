@@ -4,9 +4,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SalesPageController;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', fn () => view('landing-page'))->name('landing');
 
 Route::get('/dashboard', function () {
     return view('dashboard');
