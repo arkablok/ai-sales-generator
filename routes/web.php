@@ -25,6 +25,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/sales/regenerate/{salesPage}', [SalesPageController::class, 'regenerate'])->name('sales.regenerate');
     Route::get('/sales/export/{salesPage}', [SalesPageController::class, 'export'])->name('sales.export');
 
+    Route::post('/sales/{salesPage}/regenerate-section', [SalesPageController::class, 'regenerateSection'])
+    ->name('sales.regenerate.section');
+    
     Route::get('/render-html/{id}', function($id) {
     $page = App\Models\SalesPage::findOrFail($id);
     if ($page->user_id != auth()->id()) abort(403);
